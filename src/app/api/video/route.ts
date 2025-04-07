@@ -1,6 +1,6 @@
-
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { NextResponse } from 'next/server';
@@ -20,10 +20,11 @@ const s3 = new S3Client({
 export async function POST(req: Request) {
   const { imageUrl, audio, output } = await req.json();
 
-  const tempDir = path.join(process.cwd(), 'public');
-  const imagePath = path.join(tempDir, 'temp-image.jpg');
-  const audioPath = path.join(tempDir, 'temp-audio.mp3');
-  const outputPath = path.join(tempDir, output);
+  // ✅ Use OS temp directory for serverless compatibility (like Vercel)
+  const tempDir = os.tmpdir();
+  const imagePath = path.join(tempDir, `temp-image-${Date.now()}.jpg`);
+  const audioPath = path.join(tempDir, `temp-audio-${Date.now()}.mp3`);
+  const outputPath = path.join(tempDir, `output-${Date.now()}.mp4`);
 
   try {
     // Download image
@@ -37,10 +38,8 @@ export async function POST(req: Request) {
       fs.writeFileSync(imagePath, Buffer.from(buffer));
     }
 
-    // ✅ TEMP: Use hardcoded S3 audio URL
+    // Download audio from S3
     const audioUrl = `https://sports-reel-bucket.s3.eu-north-1.amazonaws.com/audio/${audio}`;
-    console.log("🎧 Using audio URL:", audioUrl);
-
     const audioRes = await fetch(audioUrl);
     if (!audioRes.ok) {
       console.error("❌ Failed to download audio:", await audioRes.text());
@@ -81,6 +80,7 @@ export async function POST(req: Request) {
     });
   }
 }
+
 
 
 
