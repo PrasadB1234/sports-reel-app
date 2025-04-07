@@ -1,7 +1,5 @@
 import { PollyClient, SynthesizeSpeechCommand } from "@aws-sdk/client-polly";
-import fs from 'fs';
-import path from 'path';
-import { Readable } from 'stream'; // ✅ Node.js stream import
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const polly = new PollyClient({
   region: process.env.AWS_REGION!,
@@ -11,7 +9,18 @@ const polly = new PollyClient({
   },
 });
 
-export async function synthesizeSpeechToFile(text: string, fileName: string) {
+const s3 = new S3Client({
+  region: process.env.AWS_REGION!,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
+
+const BUCKET_NAME = "sports-reel-bucket"; // ✅ Replace with your actual bucket
+const AUDIO_FOLDER = "audio"; // Optional folder prefix inside bucket
+
+export async function synthesizeSpeechToS3(text: string, fileName: string) {
   const command = new SynthesizeSpeechCommand({
     Text: text,
     OutputFormat: "mp3",
@@ -19,18 +28,27 @@ export async function synthesizeSpeechToFile(text: string, fileName: string) {
   });
 
   const { AudioStream } = await polly.send(command);
-
   if (!AudioStream) throw new Error("AudioStream is undefined");
 
-  const filePath = path.join(process.cwd(), 'public', `${fileName}.mp3`);
-  const writeStream = fs.createWriteStream(filePath);
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of AudioStream as any as AsyncIterable<Uint8Array>) {
+    chunks.push(chunk);
+  }
 
-  // ✅ Use Readable.from() to safely convert the stream
-  Readable.from(AudioStream as any).pipe(writeStream);
+  const buffer = Buffer.concat(chunks);
+  const s3Key = `${AUDIO_FOLDER}/${fileName}.mp3`;
 
-  return new Promise((resolve, reject) => {
-    writeStream.on('finish', () => resolve(`${fileName}.mp3`));
-    writeStream.on('error', reject);
-  });
+  await s3.send(
+    new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: s3Key,
+      Body: buffer,
+      ContentType: "audio/mpeg",
+    })
+  );
+
+  const s3Url = `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
+  return s3Url;
 }
+
 
