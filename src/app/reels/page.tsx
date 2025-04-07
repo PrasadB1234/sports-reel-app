@@ -8,7 +8,7 @@ export default function ReelsPage() {
   const [playerName, setPlayerName] = useState('');
   const [status, setStatus] = useState('');
   const [script, setScript] = useState('');
-  const videoRefs = useRef<HTMLVideoElement[]>([]); 
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([]); 
   const [activeIndex, setActiveIndex] = useState(0);
 
   /*Loader*/
@@ -149,7 +149,10 @@ const handleGenerate = async () => {
           <div key={i} className={styles.reel}>
             <video
               src={url}
-              ref={(el) => (videoRefs.current[i] = el!)}
+            //   ref={(el) => (videoRefs.current[i] = el!)}
+                ref={(el) => {
+                    videoRefs.current[i] = el;
+                }}
               controls
               muted
               className={styles.video}
